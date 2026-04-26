@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Read(//tmp/**)",
+      "Bash(curl -s http://localhost:5174/)",
+      "Bash(curl -s -o /dev/null -w \"main.jsx: %{http_code}\\\\n\" http://localhost:5174/src/main.jsx)",
+      "Bash(curl -s -o /dev/null -w \"Magdagbok.jsx: %{http_code}\\\\n\" http://localhost:5174/src/Magdagbok.jsx)",
+      "Bash(curl -s http://localhost:5174/src/Magdagbok.jsx)"
+    ]
+  }
+}
