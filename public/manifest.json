@@ -1,0 +1,15 @@
+{
+  "name": "Magdagboken",
+  "short_name": "Magdagbok",
+  "description": "Logga mat, symptom och mående för att hitta mönster",
+  "start_url": "/magdagbok/",
+  "scope": "/magdagbok/",
+  "display": "standalone",
+  "background_color": "#2d2416",
+  "theme_color": "#2d2416",
+  "lang": "sv",
+  "icons": [
+    { "src": "/magdagbok/logga.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/magdagbok/logga.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
