@@ -355,7 +355,7 @@ export default function Magdagbok() {
           <div className="flex items-baseline justify-between">
             <div className="flex items-center gap-3">
               <img
-                src="/logga.png"
+                src={`${import.meta.env.BASE_URL}logga.png`}
                 alt="Magdagboken"
                 style={{ width: '40px', height: '40px', borderRadius: '10px' }}
               />
