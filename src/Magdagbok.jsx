@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Utensils, Activity, TrendingUp, ArrowLeft, Check, Copy, Droplet, Download, Upload, Pencil, GlassWater, ChevronDown, ChevronUp } from 'lucide-react';
+import { Utensils, Activity, TrendingUp, ArrowLeft, Check, Copy, Droplet, Download, Upload, Pencil, GlassWater, ChevronDown, ChevronUp, Pill } from 'lucide-react';
 
 // ============================================================================
 // MAT-TAXONOMI
@@ -12,6 +12,85 @@ const PROTEIN_OPTIONS = [
   'Rött kött', 'Fågel', 'Fisk', 'Skaldjur', 'Ägg',
   'Mejeri', 'Baljväxter', 'Tofu/soja', 'Nötter/frön', 'Inget protein'
 ];
+
+// Frukost-specifik proteinlista
+const BREAKFAST_PROTEINS = [
+  'Flingor/müsli', 'Fil/yoghurt', 'Ägg',
+  'Mejeri', 'Baljväxter', 'Tofu/soja', 'Nötter/frön', 'Inget protein'
+];
+
+// Per kosthållning: vilka protein- och kategori-items som inte är applicerbara
+const DIET_EXCLUSIONS = {
+  'Veganskt': {
+    proteins: ['Rött kött', 'Fågel', 'Fisk', 'Skaldjur', 'Ägg', 'Mejeri'],
+    items: [
+      'Smör', 'Laktosfritt margarin/smör',
+      'Grädde (vanlig)', 'Grädde (laktosfri)',
+      'Crème fraiche (vanlig)', 'Crème fraiche (laktosfri)',
+      'Mjölk (vanlig)', 'Laktosfri mjölk',
+      'Yoghurt (vanlig)', 'Laktosfri yoghurt',
+      'Ost (hård, t.ex. cheddar)', 'Ost (mjuk/färsk)',
+      'Glass', 'Majonnäs', 'Pesto', 'Choklad (mjölk)'
+    ]
+  },
+  'Vegetariskt': {
+    proteins: ['Rött kött', 'Fågel', 'Fisk', 'Skaldjur'],
+    items: []
+  },
+  'Pescetariansk': {
+    proteins: ['Rött kött', 'Fågel'],
+    items: []
+  },
+  'Blandkost': {
+    proteins: [],
+    items: []
+  }
+};
+
+// Måltidstyper — styr om formuläret visar full accordion eller snabblogg
+const MEAL_TYPES = [
+  { key: 'frukost', label: 'Frukost', emoji: '🍳' },
+  { key: 'lunch', label: 'Lunch', emoji: '🍽️' },
+  { key: 'middag', label: 'Middag', emoji: '🍽️' },
+  { key: 'mellanmål', label: 'Mellanmål', emoji: '🍎' },
+  { key: 'kvällsmat', label: 'Kvällsmat', emoji: '🍽️' },
+  { key: 'snacks', label: 'Snacks/godis', emoji: '🍬' }
+];
+
+// Snabbval för snabblogg-läget — sparas som snackItems, utan FODMAP-tagg
+const MELLANMAL_QUICK = [
+  'Frukt', 'Yoghurt/fil', 'Nötter/frön', 'Smörgås',
+  'Proteinbar', 'Kex/knäcke', 'Smoothie', 'Annat'
+];
+const SNACKS_QUICK = [
+  'Chips', 'Choklad', 'Godis', 'Kaka/bakelse',
+  'Popcorn', 'Glass', 'Jordnötter', 'Kex', 'Annat'
+];
+
+function defaultMealType() {
+  const h = new Date().getHours();
+  if (h >= 6 && h <= 10) return 'frukost';
+  if (h >= 11 && h <= 13) return 'lunch';
+  if (h >= 14 && h <= 16) return 'mellanmål';
+  if (h >= 17 && h <= 20) return 'middag';
+  if (h >= 21 && h <= 23) return 'kvällsmat';
+  return 'snacks';
+}
+
+function mealTypeMeta(key) {
+  return MEAL_TYPES.find(m => m.key === key) || { label: 'Måltid', emoji: '🍽️' };
+}
+
+// Returnerar accordion-kategorier inklusive en proteinkategori som varierar per måltidstyp
+function getFoodCategories(mealType) {
+  const proteinList = mealType === 'frukost' ? BREAKFAST_PROTEINS : PROTEIN_OPTIONS;
+  const proteinCat = {
+    key: 'protein',
+    label: 'Protein',
+    options: proteinList.map(label => ({ label, fodmap: 'neutral' }))
+  };
+  return [proteinCat, ...FOOD_CATEGORIES];
+}
 
 // Multi-select med underval. fodmap: 'high' / 'low' / 'mixed' / 'neutral'
 const FOOD_CATEGORIES = [
@@ -75,32 +154,31 @@ const FOOD_CATEGORIES = [
     ]
   },
   {
-    key: 'fett',
-    label: 'Fett/sås',
+    key: 'mejeri_fett',
+    label: 'Mejeri, fett & sås',
     options: [
       { label: 'Smör', fodmap: 'low' },
-      { label: 'Olivolja', fodmap: 'low' },
-      { label: 'Grädde', fodmap: 'high' },
-      { label: 'Crème fraiche', fodmap: 'high' },
-      { label: 'Majonnäs', fodmap: 'low' },
-      { label: 'Pesto', fodmap: 'mixed' },
-      { label: 'Tomatsås', fodmap: 'mixed' },
-      { label: 'Soja-/teriyakisås', fodmap: 'low' }
-    ]
-  },
-  {
-    key: 'mejeri',
-    label: 'Mejeri',
-    options: [
+      { label: 'Laktosfritt margarin/smör', fodmap: 'low' },
+      { label: 'Olivolja / matolja', fodmap: 'low' },
+      { label: 'Grädde (vanlig)', fodmap: 'high' },
+      { label: 'Grädde (laktosfri)', fodmap: 'low' },
+      { label: 'Havregrädde (vegansk)', fodmap: 'low' },
+      { label: 'Crème fraiche (vanlig)', fodmap: 'high' },
+      { label: 'Crème fraiche (laktosfri)', fodmap: 'low' },
+      { label: 'Crème fraiche (vegansk)', fodmap: 'low' },
       { label: 'Mjölk (vanlig)', fodmap: 'high' },
       { label: 'Laktosfri mjölk', fodmap: 'low' },
       { label: 'Havre-/mandelmjölk', fodmap: 'low' },
-      { label: 'Yoghurt', fodmap: 'high' },
+      { label: 'Yoghurt (vanlig)', fodmap: 'high' },
       { label: 'Laktosfri yoghurt', fodmap: 'low' },
-      { label: 'Ost (hård)', fodmap: 'low' },
+      { label: 'Ost (hård, t.ex. cheddar)', fodmap: 'low' },
       { label: 'Ost (mjuk/färsk)', fodmap: 'high' },
       { label: 'Glass', fodmap: 'high' },
-      { label: 'Smörgåsmargarin', fodmap: 'low' }
+      { label: 'Majonnäs', fodmap: 'low' },
+      { label: 'Majonnäs (vegansk)', fodmap: 'low' },
+      { label: 'Pesto', fodmap: 'mixed' },
+      { label: 'Tomatsås', fodmap: 'mixed' },
+      { label: 'Soja-/teriyakisås', fodmap: 'low' }
     ]
   },
   {
@@ -131,6 +209,51 @@ const FOOD_CATEGORIES = [
 ];
 
 // ============================================================================
+// MEDICIN-TAXONOMI
+// ============================================================================
+const MEDICINE_QUICK = [
+  'Ipren/Ibuprofen', 'Alvedon/Paracetamol', 'Omeprazol', 'Antibiotika',
+  'Dulcogas', 'Iberogast', 'Järntabletter', 'Probiotika', 'Magnesium',
+  'Laxermedel', 'Antihistamin', 'Annat'
+];
+
+const MEDICINE_TYPES = [
+  { key: 'regelbunden', label: 'Regelbunden (varje dag)' },
+  { key: 'tillfällig', label: 'Tillfällig' },
+  { key: 'vid_behov', label: 'Vid behov' }
+];
+
+function medicineTypeLabel(key) {
+  return MEDICINE_TYPES.find(t => t.key === key)?.label || key;
+}
+
+const REGULAR_MEDICINE_QUICK = [
+  'Omeprazol', 'Ipren/Ibuprofen', 'Alvedon', 'Dulcogas', 'Iberogast',
+  'Järntabletter', 'Probiotika', 'Magnesium', 'Laxermedel', 'Antihistamin', 'Annat'
+];
+
+const WEEKDAYS = ['mån', 'tis', 'ons', 'tor', 'fre', 'lör', 'sön'];
+
+function joinTimes(times) {
+  if (!times || times.length === 0) return '';
+  if (times.length === 1) return times[0];
+  if (times.length === 2) return `${times[0]} och ${times[1]}`;
+  return times.join(', ');
+}
+
+function formatRegularMedicine(m) {
+  const namePart = m.dose ? `${m.name} ${m.dose}` : m.name;
+  const timesStr = joinTimes(m.times);
+  if (m.frequency === 'weekly') {
+    const days = (m.weekdays && m.weekdays.length > 0)
+      ? m.weekdays.join('/')
+      : 'vissa dagar';
+    return `${namePart} — ${days}${timesStr ? ' kl ' + timesStr : ''}`;
+  }
+  return `${namePart} — varje dag${timesStr ? ' kl ' + timesStr : ''}`;
+}
+
+// ============================================================================
 // HUVUDKOMPONENT
 // ============================================================================
 
@@ -139,11 +262,19 @@ export default function Magdagbok() {
   const [editingEntry, setEditingEntry] = useState(null);
   const [entries, setEntries] = useState([]);
   const [copyStatus, setCopyStatus] = useState('');
+  const [regularMedicines, setRegularMedicines] = useState([]);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('magdagbok_entries');
       if (saved) setEntries(JSON.parse(saved));
+    } catch (e) {}
+    try {
+      const savedMeds = localStorage.getItem('regularMedicines');
+      if (savedMeds) {
+        const parsed = JSON.parse(savedMeds);
+        if (Array.isArray(parsed)) setRegularMedicines(parsed);
+      }
     } catch (e) {}
   }, []);
 
@@ -152,6 +283,27 @@ export default function Magdagbok() {
       localStorage.setItem('magdagbok_entries', JSON.stringify(entries));
     } catch (e) {}
   }, [entries]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('regularMedicines', JSON.stringify(regularMedicines));
+    } catch (e) {}
+  }, [regularMedicines]);
+
+  const addRegularMedicine = (m) => setRegularMedicines(prev => [...prev, { ...m, id: Date.now() }]);
+  const updateRegularMedicine = (id, updates) =>
+    setRegularMedicines(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  const deleteRegularMedicine = (id) =>
+    setRegularMedicines(prev => prev.filter(m => m.id !== id));
+  const clearRegularMedicines = () => setRegularMedicines([]);
+  const replaceRegularMedicines = (arr) => setRegularMedicines(arr);
+  const mergeRegularMedicines = (arr) => {
+    setRegularMedicines(prev => {
+      const ids = new Set(prev.map(m => m.id));
+      const toAdd = arr.filter(m => !ids.has(m.id));
+      return [...prev, ...toAdd];
+    });
+  };
 
   const addEntry = (entry) => setEntries(prev => [{ ...entry, id: Date.now() }, ...prev]);
   const updateEntry = (id, updates) => setEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
@@ -201,16 +353,30 @@ export default function Magdagbok() {
       <div className="max-w-md mx-auto px-5 pt-8 pb-32">
         <header className="mb-6 fade-in">
           <div className="flex items-baseline justify-between">
-            <h1 style={{ fontSize: '32px', fontWeight: 500, letterSpacing: '-0.02em', color: '#2d2416' }}>
-              Magdagbok
-            </h1>
+            <div className="flex items-center gap-3">
+              <img
+                src="/logga.png"
+                alt="Magdagboken"
+                style={{ width: '40px', height: '40px', borderRadius: '10px' }}
+              />
+              <h1 style={{ fontSize: '32px', fontWeight: 500, letterSpacing: '-0.02em', color: '#2d2416' }}>
+                Magdagbok
+              </h1>
+            </div>
             <span className="sans text-xs" style={{ color: '#8b7355' }}>
               {new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
             </span>
           </div>
-          <p className="sans text-sm mt-1" style={{ color: '#8b7355' }}>
-            {entries.length === 0 ? 'Börja logga för att hitta mönster' : `${entries.length} anteckningar`}
-          </p>
+          <div className="flex items-center justify-between mt-1 gap-3">
+            <p className="sans text-sm" style={{ color: '#8b7355' }}>
+              {entries.length === 0 ? 'Börja logga för att hitta mönster' : `${entries.length} anteckningar`}
+            </p>
+            <button onClick={() => setView('minaMediciner')}
+              className="sans text-xs px-3 py-1.5 rounded-full scale-btn flex-shrink-0"
+              style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
+              💊 Mina mediciner{regularMedicines.length > 0 ? ` (${regularMedicines.length})` : ''}
+            </button>
+          </div>
         </header>
 
         {view === 'home' && todayLiquidMl > 0 && (
@@ -260,6 +426,7 @@ export default function Magdagbok() {
         {view === 'logSymptom' && <LogSymptom onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
         {view === 'logToilet' && <LogToilet onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
         {view === 'logLiquid' && <LogLiquid onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
+        {view === 'logMedicine' && <LogMedicine onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
         {view === 'edit' && editingEntry && (
           <EditEntry entry={editingEntry}
             onSave={(updates) => { updateEntry(editingEntry.id, updates); setView('home'); setEditingEntry(null); }}
@@ -267,9 +434,20 @@ export default function Magdagbok() {
             onBack={() => { setView('home'); setEditingEntry(null); }} />
         )}
         {view === 'insights' && (
-          <Insights entries={entries} onBack={() => setView('home')}
+          <Insights entries={entries} regularMedicines={regularMedicines}
+            onBack={() => setView('home')}
             copyStatus={copyStatus} setCopyStatus={setCopyStatus}
-            onReplace={replaceAll} onMerge={mergeEntries} />
+            onReplace={replaceAll} onMerge={mergeEntries}
+            onClearRegularMedicines={clearRegularMedicines}
+            onReplaceRegularMedicines={replaceRegularMedicines}
+            onMergeRegularMedicines={mergeRegularMedicines} />
+        )}
+        {view === 'minaMediciner' && (
+          <MinaMediciner medicines={regularMedicines}
+            onAdd={addRegularMedicine}
+            onUpdate={updateRegularMedicine}
+            onDelete={deleteRegularMedicine}
+            onBack={() => setView('home')} />
         )}
       </div>
 
@@ -290,8 +468,13 @@ export default function Magdagbok() {
             </button>
             <button onClick={() => setView('logSymptom')}
               className="flex-1 py-3 rounded-2xl scale-btn flex flex-col items-center justify-center gap-1 sans text-xs font-medium"
-              style={{ background: '#2d2416', color: '#f5ede3' }}>
+              style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
               <Activity size={15} />Symptom
+            </button>
+            <button onClick={() => setView('logMedicine')}
+              className="flex-1 py-3 rounded-2xl scale-btn flex flex-col items-center justify-center gap-1 sans text-xs font-medium"
+              style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
+              <Pill size={15} />Medicin
             </button>
             <button onClick={() => setView('logToilet')}
               className="flex-1 py-3 rounded-2xl scale-btn flex flex-col items-center justify-center gap-1 sans text-xs font-medium"
@@ -373,13 +556,16 @@ function EntryCard({ entry, onDelete, onEdit }) {
   );
 
   if (entry.type === 'food') {
-    // Bygg en sammanfattningstext av de strukturerade fälten
+    const meta = mealTypeMeta(entry.mealType);
     const allItems = [];
     if (entry.protein && entry.protein !== 'Inget protein') allItems.push(entry.protein);
     if (entry.categories) {
       Object.values(entry.categories).flat().forEach(item => {
         if (item?.label) allItems.push(item.label);
       });
+    }
+    if (Array.isArray(entry.snackItems)) {
+      entry.snackItems.forEach(label => allItems.push(label));
     }
     const summary = allItems.length > 0
       ? allItems.slice(0, 4).join(', ') + (allItems.length > 4 ? ` +${allItems.length - 4}` : '')
@@ -389,14 +575,20 @@ function EntryCard({ entry, onDelete, onEdit }) {
       <div onClick={() => setShowActions(!showActions)} className="p-4 rounded-2xl cursor-pointer"
         style={{ background: '#fff', border: '1px solid #e8dfd0' }}>
         <div className="flex items-start gap-3">
-          <div className="mt-1" style={{ fontSize: '18px' }}>🍽️</div>
+          <div className="mt-1" style={{ fontSize: '18px' }}>{meta.emoji}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2">
               <p className="sans text-sm font-medium truncate" style={{ color: '#2d2416' }}>{summary}</p>
               <span className="sans text-xs flex-shrink-0" style={{ color: '#8b7355' }}>{formatTime(entry.eatenAt)}</span>
             </div>
-            <p className="sans text-xs mt-1" style={{ color: '#8b7355' }}>
-              {entry.diet}{entry.portion && ` · portion ${entry.portion}`}
+            <p className="sans text-xs mt-1 flex flex-wrap items-center gap-x-2 gap-y-1" style={{ color: '#8b7355' }}>
+              {entry.mealType && (
+                <span className="inline-block px-2 py-0.5 rounded-full"
+                  style={{ background: '#f5ede3', color: '#2d2416', fontWeight: 500 }}>
+                  {meta.emoji} {meta.label}
+                </span>
+              )}
+              <span>{entry.diet}{entry.portion ? ` · portion ${entry.portion}` : ''}</span>
             </p>
             {entry.description && (
               <p className="sans text-xs mt-1 italic" style={{ color: '#a08a6f' }}>"{entry.description}"</p>
@@ -449,6 +641,38 @@ function EntryCard({ entry, onDelete, onEdit }) {
               {entry.blood && ' · blod'}
               {entry.mucus && ' · slem'}
             </p>
+          </div>
+        </div>
+        {renderActions()}
+      </div>
+    );
+  }
+
+  if (entry.type === 'medicine') {
+    const meds = Array.isArray(entry.medicines) ? entry.medicines : [];
+    return (
+      <div onClick={() => setShowActions(!showActions)} className="p-4 rounded-2xl cursor-pointer"
+        style={{ background: '#fff', border: '1px solid #e8dfd0' }}>
+        <div className="flex items-start gap-3">
+          <div className="mt-1" style={{ fontSize: '18px' }}>💊</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="sans text-sm font-medium" style={{ color: '#2d2416' }}>
+                {meds.length > 0 ? `${meds.length} ${meds.length === 1 ? 'medicin' : 'mediciner'}` : 'Medicin'}
+                {entry.dose ? ` · ${entry.dose}` : ''}
+              </p>
+              <span className="sans text-xs flex-shrink-0" style={{ color: '#8b7355' }}>{formatTime(entry.time)}</span>
+            </div>
+            {meds.length > 0 && (
+              <ul className="sans text-xs mt-2 space-y-0.5" style={{ color: '#2d2416' }}>
+                {meds.map((m, i) => (
+                  <li key={i}>· {m}</li>
+                ))}
+              </ul>
+            )}
+            {entry.note && (
+              <p className="sans text-xs mt-2 italic" style={{ color: '#a08a6f' }}>"{entry.note}"</p>
+            )}
           </div>
         </div>
         {renderActions()}
@@ -516,14 +740,57 @@ function EntryCard({ entry, onDelete, onEdit }) {
 // ============================================================================
 
 function LogFood({ onSave, onBack }) {
+  const [mealType, setMealType] = useState(defaultMealType);
   const [diet, setDiet] = useState('Blandkost');
-  const [protein, setProtein] = useState('');
-  // categories: { kolhydrat: [{label, fodmap}], gronsaker: [...], ... }
   const [categories, setCategories] = useState({});
+  const [snackItems, setSnackItems] = useState([]);
+  const [customSnack, setCustomSnack] = useState('');
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [portion, setPortion] = useState('normal');
   const [description, setDescription] = useState('');
   const [time, setTime] = useState(toLocalDateTime(new Date()));
+
+  const isSnackMode = mealType === 'mellanmål' || mealType === 'snacks';
+  const currentCategories = getFoodCategories(mealType);
+  const quickItems = mealType === 'mellanmål' ? MELLANMAL_QUICK : SNACKS_QUICK;
+  const quickPlaceholder = mealType === 'mellanmål'
+    ? 'T.ex. en banan, rikskorpor...'
+    : 'T.ex. chips, en bit choklad...';
+
+  const dietExclSet = new Set([
+    ...(DIET_EXCLUSIONS[diet]?.proteins || []),
+    ...(DIET_EXCLUSIONS[diet]?.items || [])
+  ]);
+
+  // Rensa proteinval som inte är giltiga för aktuell måltidstyp (frukost vs övriga)
+  useEffect(() => {
+    const validLabels = new Set(
+      (mealType === 'frukost' ? BREAKFAST_PROTEINS : PROTEIN_OPTIONS)
+    );
+    setCategories(prev => {
+      if (!prev.protein) return prev;
+      const filtered = prev.protein.filter(item => validLabels.has(item.label));
+      if (filtered.length === prev.protein.length) return prev;
+      const next = { ...prev };
+      if (filtered.length > 0) next.protein = filtered;
+      else delete next.protein;
+      return next;
+    });
+  }, [mealType]);
+
+  // Avmarkera inkompatibla val när kosthållning ändras
+  useEffect(() => {
+    const excl = DIET_EXCLUSIONS[diet] || { proteins: [], items: [] };
+    const allExcluded = new Set([...excl.proteins, ...excl.items]);
+    setCategories(prev => {
+      const next = {};
+      Object.entries(prev).forEach(([k, arr]) => {
+        const filtered = arr.filter(item => !allExcluded.has(item.label));
+        if (filtered.length > 0) next[k] = filtered;
+      });
+      return next;
+    });
+  }, [diet]);
 
   const toggleCategoryItem = (catKey, option) => {
     setCategories(prev => {
@@ -539,27 +806,67 @@ function LogFood({ onSave, onBack }) {
     });
   };
 
+  const toggleSnackItem = (label) => {
+    setSnackItems(prev => prev.includes(label)
+      ? prev.filter(x => x !== label)
+      : [...prev, label]);
+  };
+
   const totalSelections = Object.values(categories).reduce((sum, arr) => sum + arr.length, 0);
 
-  const canSave = protein || totalSelections > 0 || description.trim();
+  const canSave = isSnackMode
+    ? (snackItems.length > 0 || description.trim())
+    : (totalSelections > 0 || description.trim());
 
   const save = () => {
     if (!canSave) return;
-    onSave({
-      type: 'food',
-      diet,
-      protein: protein || null,
-      categories, // strukturerad data
-      portion,
-      description: description.trim() || null,
-      eatenAt: new Date(time).toISOString()
-    });
+    const eatenAt = new Date(time).toISOString();
+    if (isSnackMode) {
+      const finalSnacks = customSnack.trim()
+        ? snackItems.map(x => x === 'Annat' ? customSnack.trim() : x)
+        : snackItems;
+      onSave({
+        type: 'food',
+        mealType,
+        diet,
+        snackItems: finalSnacks,
+        description: description.trim() || null,
+        eatenAt
+      });
+    } else {
+      onSave({
+        type: 'food',
+        mealType,
+        diet,
+        categories,
+        portion,
+        description: description.trim() || null,
+        eatenAt
+      });
+    }
   };
 
   return (
     <div className="fade-in">
       <FormHeader title="Vad åt du?" onBack={onBack} />
       <div className="space-y-5">
+        <Field label="Måltid">
+          <div className="grid grid-cols-3 gap-2">
+            {MEAL_TYPES.map(m => (
+              <button key={m.key} onClick={() => setMealType(m.key)}
+                className="sans text-xs py-2.5 rounded-xl scale-btn flex flex-col items-center justify-center gap-1"
+                style={{
+                  background: mealType === m.key ? '#2d2416' : '#fff',
+                  color: mealType === m.key ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>
+                <span style={{ fontSize: '18px', lineHeight: 1 }}>{m.emoji}</span>
+                <span>{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </Field>
+
         <Field label="Kosthållning">
           <div className="grid grid-cols-2 gap-2">
             {DIET_OPTIONS.map(d => (
@@ -572,98 +879,123 @@ function LogFood({ onSave, onBack }) {
                 }}>{d}</button>
             ))}
           </div>
+          {diet !== 'Blandkost' && (
+            <p className="sans text-xs mt-2 px-1" style={{ color: '#a08a6f' }}>
+              Inkompatibla alternativ tonas ned automatiskt
+            </p>
+          )}
         </Field>
 
-        <Field label="Huvudprotein">
-          <div className="flex flex-wrap gap-2">
-            {PROTEIN_OPTIONS.map(p => (
-              <button key={p} onClick={() => setProtein(protein === p ? '' : p)}
-                className="sans text-xs px-3 py-2 rounded-full scale-btn"
-                style={{
-                  background: protein === p ? '#2d2416' : '#fff',
-                  color: protein === p ? '#f5ede3' : '#2d2416',
-                  border: '1px solid #e0d4c0'
-                }}>{p}</button>
-            ))}
-          </div>
-        </Field>
-
-        <Field label={`Innehåll${totalSelections > 0 ? ` (${totalSelections} valda)` : ''}`}>
-          <div className="space-y-2">
-            {FOOD_CATEGORIES.map(cat => {
-              const selected = categories[cat.key] || [];
-              const isOpen = expandedCategory === cat.key;
-              return (
-                <div key={cat.key} className="rounded-xl overflow-hidden"
-                  style={{ background: '#fff', border: '1px solid #e0d4c0' }}>
-                  <button onClick={() => setExpandedCategory(isOpen ? null : cat.key)}
-                    className="w-full px-4 py-3 flex items-center justify-between scale-btn">
-                    <div className="flex items-center gap-2">
-                      <span className="sans text-sm font-medium" style={{ color: '#2d2416' }}>{cat.label}</span>
-                      {selected.length > 0 && (
-                        <span className="sans text-xs px-2 py-0.5 rounded-full"
-                          style={{ background: '#2d2416', color: '#f5ede3' }}>
-                          {selected.length}
-                        </span>
+        {isSnackMode ? (
+          <Field label="Snabbval">
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {quickItems.map(q => {
+                  const selected = snackItems.includes(q);
+                  return (
+                    <button key={q} onClick={() => toggleSnackItem(q)}
+                      className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                      style={{
+                        background: selected ? '#2d2416' : '#fff',
+                        color: selected ? '#f5ede3' : '#2d2416',
+                        border: '1px solid #e0d4c0'
+                      }}>{q}</button>
+                  );
+                })}
+              </div>
+              {snackItems.includes('Annat') && (
+                <input type="text" value={customSnack}
+                  onChange={e => setCustomSnack(e.target.value)}
+                  placeholder="Skriv vad..."
+                  autoFocus
+                  className="sans w-full px-4 py-3 rounded-xl text-sm"
+                  style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+              )}
+            </div>
+          </Field>
+        ) : (
+          <>
+            <Field label={`Innehåll${totalSelections > 0 ? ` (${totalSelections} valda)` : ''}`}>
+              <div className="space-y-2">
+                {currentCategories.map(cat => {
+                  const selected = categories[cat.key] || [];
+                  const isOpen = expandedCategory === cat.key;
+                  return (
+                    <div key={cat.key} className="rounded-xl overflow-hidden"
+                      style={{ background: '#fff', border: '1px solid #e0d4c0' }}>
+                      <button onClick={() => setExpandedCategory(isOpen ? null : cat.key)}
+                        className="w-full px-4 py-3 flex items-center justify-between scale-btn">
+                        <div className="flex items-center gap-2">
+                          <span className="sans text-sm font-medium" style={{ color: '#2d2416' }}>{cat.label}</span>
+                          {selected.length > 0 && (
+                            <span className="sans text-xs px-2 py-0.5 rounded-full"
+                              style={{ background: '#2d2416', color: '#f5ede3' }}>
+                              {selected.length}
+                            </span>
+                          )}
+                        </div>
+                        {isOpen ? <ChevronUp size={16} style={{ color: '#8b7355' }} /> : <ChevronDown size={16} style={{ color: '#8b7355' }} />}
+                      </button>
+                      {selected.length > 0 && !isOpen && (
+                        <div className="px-4 pb-3 flex flex-wrap gap-1">
+                          {selected.map(item => (
+                            <span key={item.label} className="sans text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                background: fodmapBg(item.fodmap),
+                                color: fodmapColor(item.fodmap)
+                              }}>
+                              {item.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {isOpen && (
+                        <div className="px-3 pb-3 flex flex-wrap gap-2">
+                          {cat.options.map(opt => {
+                            const isSelected = selected.some(s => s.label === opt.label);
+                            const excluded = dietExclSet.has(opt.label);
+                            return (
+                              <button key={opt.label} onClick={() => toggleCategoryItem(cat.key, opt)}
+                                className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                                style={{
+                                  background: isSelected ? '#2d2416' : fodmapBg(opt.fodmap),
+                                  color: isSelected ? '#f5ede3' : fodmapColor(opt.fodmap),
+                                  border: '1px solid',
+                                  borderColor: isSelected ? '#2d2416' : fodmapBorder(opt.fodmap),
+                                  opacity: excluded ? 0.35 : 1,
+                                  pointerEvents: excluded ? 'none' : 'auto'
+                                }}>
+                                {opt.label}
+                                {opt.fodmap === 'high' && !isSelected && <span className="ml-1" style={{ opacity: 0.6 }}>•</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                    {isOpen ? <ChevronUp size={16} style={{ color: '#8b7355' }} /> : <ChevronDown size={16} style={{ color: '#8b7355' }} />}
-                  </button>
-                  {selected.length > 0 && !isOpen && (
-                    <div className="px-4 pb-3 flex flex-wrap gap-1">
-                      {selected.map(item => (
-                        <span key={item.label} className="sans text-xs px-2 py-0.5 rounded-full"
-                          style={{
-                            background: fodmapBg(item.fodmap),
-                            color: fodmapColor(item.fodmap)
-                          }}>
-                          {item.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {isOpen && (
-                    <div className="px-3 pb-3 flex flex-wrap gap-2">
-                      {cat.options.map(opt => {
-                        const isSelected = selected.some(s => s.label === opt.label);
-                        return (
-                          <button key={opt.label} onClick={() => toggleCategoryItem(cat.key, opt)}
-                            className="sans text-xs px-3 py-2 rounded-full scale-btn"
-                            style={{
-                              background: isSelected ? '#2d2416' : fodmapBg(opt.fodmap),
-                              color: isSelected ? '#f5ede3' : fodmapColor(opt.fodmap),
-                              border: '1px solid',
-                              borderColor: isSelected ? '#2d2416' : fodmapBorder(opt.fodmap)
-                            }}>
-                            {opt.label}
-                            {opt.fodmap === 'high' && !isSelected && <span className="ml-1" style={{ opacity: 0.6 }}>•</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p className="sans text-xs mt-2 px-1" style={{ color: '#a08a6f' }}>
-            Punkt (•) markerar livsmedel som ofta är magkänsliga (höga FODMAPs)
-          </p>
-        </Field>
+                  );
+                })}
+              </div>
+              <p className="sans text-xs mt-2 px-1" style={{ color: '#a08a6f' }}>
+                Punkt (•) markerar livsmedel som ofta är magkänsliga (höga FODMAPs)
+              </p>
+            </Field>
 
-        <Field label="Portion">
-          <div className="grid grid-cols-3 gap-2">
-            {['liten', 'normal', 'stor'].map(p => (
-              <button key={p} onClick={() => setPortion(p)}
-                className="sans py-3 rounded-xl text-sm capitalize scale-btn"
-                style={{
-                  background: portion === p ? '#2d2416' : '#fff',
-                  color: portion === p ? '#f5ede3' : '#2d2416',
-                  border: '1px solid #e0d4c0'
-                }}>{p}</button>
-            ))}
-          </div>
-        </Field>
+            <Field label="Portion">
+              <div className="grid grid-cols-3 gap-2">
+                {['liten', 'normal', 'stor'].map(p => (
+                  <button key={p} onClick={() => setPortion(p)}
+                    className="sans py-3 rounded-xl text-sm capitalize scale-btn"
+                    style={{
+                      background: portion === p ? '#2d2416' : '#fff',
+                      color: portion === p ? '#f5ede3' : '#2d2416',
+                      border: '1px solid #e0d4c0'
+                    }}>{p}</button>
+                ))}
+              </div>
+            </Field>
+          </>
+        )}
 
         <Field label="När">
           <input type="datetime-local" value={time} onChange={e => setTime(e.target.value)}
@@ -673,7 +1005,7 @@ function LogFood({ onSave, onBack }) {
 
         <Field label="Beskrivning (valfritt)">
           <input type="text" value={description} onChange={e => setDescription(e.target.value)}
-            placeholder="T.ex. carbonara, dagens lunch, mors köttbullar"
+            placeholder={isSnackMode ? quickPlaceholder : 'T.ex. carbonara, dagens lunch, mors köttbullar'}
             className="sans w-full px-4 py-3 rounded-xl text-sm"
             style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
         </Field>
@@ -712,11 +1044,16 @@ function fodmapBorder(fodmap) {
 
 function LogLiquid({ onSave, onBack }) {
   const [kind, setKind] = useState('Vatten');
+  const [customKind, setCustomKind] = useState('');
   const [amountMl, setAmountMl] = useState(300);
   const [time, setTime] = useState(toLocalDateTime(new Date()));
   const [notes, setNotes] = useState('');
 
-  const kinds = ['Vatten', 'Kaffe', 'Te', 'Mjölk', 'Juice', 'Läsk', 'Alkohol', 'Energidryck', 'Movicol', 'Annat'];
+  const nonAlcoholic = [
+    'Vatten', 'Vatten - Kolsyrat', 'Kaffe', 'Te', 'Mjölk', 'Juice',
+    'Läsk', 'Läsk - Sockerfri', 'Energidryck', 'Movicol', 'Annat'
+  ];
+  const alcoholic = ['Drink', 'Öl', 'Rödvin', 'Vittvin', 'Vin - Mousserande'];
   const presets = [
     { label: 'Litet glas', ml: 200 },
     { label: 'Glas', ml: 300 },
@@ -726,30 +1063,54 @@ function LogLiquid({ onSave, onBack }) {
   ];
 
   const save = () => {
+    const finalKind = kind === 'Annat' && customKind.trim()
+      ? customKind.trim()
+      : kind;
     onSave({
       type: 'liquid',
-      kind,
+      kind: finalKind,
       amountMl: Number(amountMl),
       atTime: new Date(time).toISOString(),
       notes: notes.trim() || null
     });
   };
 
+  const renderKindButton = (k) => (
+    <button key={k} onClick={() => setKind(k)}
+      className="sans text-xs px-3 py-2 rounded-full scale-btn"
+      style={{
+        background: kind === k ? '#2d2416' : '#fff',
+        color: kind === k ? '#f5ede3' : '#2d2416',
+        border: '1px solid #e0d4c0'
+      }}>{k}</button>
+  );
+
   return (
     <div className="fade-in">
       <FormHeader title="Vad drack du?" onBack={onBack} />
       <div className="space-y-5">
         <Field label="Vad">
-          <div className="flex flex-wrap gap-2">
-            {kinds.map(k => (
-              <button key={k} onClick={() => setKind(k)}
-                className="sans text-xs px-3 py-2 rounded-full scale-btn"
-                style={{
-                  background: kind === k ? '#2d2416' : '#fff',
-                  color: kind === k ? '#f5ede3' : '#2d2416',
-                  border: '1px solid #e0d4c0'
-                }}>{k}</button>
-            ))}
+          <div className="space-y-3">
+            <div>
+              <div className="sans text-[11px] uppercase tracking-wider mb-2" style={{ color: '#8b7355' }}>Alkoholfritt</div>
+              <div className="flex flex-wrap gap-2">
+                {nonAlcoholic.map(renderKindButton)}
+              </div>
+            </div>
+            <div>
+              <div className="sans text-[11px] uppercase tracking-wider mb-2" style={{ color: '#8b7355' }}>Alkohol</div>
+              <div className="flex flex-wrap gap-2">
+                {alcoholic.map(renderKindButton)}
+              </div>
+            </div>
+            {kind === 'Annat' && (
+              <input type="text" value={customKind}
+                onChange={e => setCustomKind(e.target.value)}
+                placeholder="Skriv vad..."
+                autoFocus
+                className="sans w-full px-4 py-3 rounded-xl text-sm"
+                style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+            )}
           </div>
         </Field>
 
@@ -1001,6 +1362,334 @@ function LogToilet({ onSave, onBack }) {
   );
 }
 
+function LogMedicine({ onSave, onBack }) {
+  const [medicines, setMedicines] = useState([]);
+  const [customMedicine, setCustomMedicine] = useState('');
+  const [dose, setDose] = useState('');
+  const [time, setTime] = useState(toLocalDateTime(new Date()));
+  const [note, setNote] = useState('');
+
+  const toggleMedicine = (m) => setMedicines(prev =>
+    prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+
+  const save = () => {
+    const finalMeds = medicines.map(m =>
+      m === 'Annat' && customMedicine.trim() ? customMedicine.trim() : m
+    );
+    onSave({
+      type: 'medicine',
+      medicines: finalMeds,
+      dose: dose.trim(),
+      time: new Date(time).toISOString(),
+      note: note.trim()
+    });
+  };
+
+  return (
+    <div className="fade-in">
+      <FormHeader title="Vilken medicin?" onBack={onBack} />
+      <div className="space-y-5">
+        <Field label="Medicin">
+          <div className="flex flex-wrap gap-2">
+            {MEDICINE_QUICK.map(m => (
+              <button key={m} onClick={() => toggleMedicine(m)}
+                className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                style={{
+                  background: medicines.includes(m) ? '#2d2416' : '#fff',
+                  color: medicines.includes(m) ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>{m}</button>
+            ))}
+          </div>
+          {medicines.includes('Annat') && (
+            <input type="text" value={customMedicine}
+              onChange={e => setCustomMedicine(e.target.value)}
+              placeholder="Skriv vilken medicin..."
+              autoFocus
+              className="sans w-full mt-3 px-4 py-3 rounded-xl text-sm"
+              style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+          )}
+        </Field>
+
+        <Field label="Dos (valfritt)">
+          <input type="text" value={dose} onChange={e => setDose(e.target.value)}
+            placeholder="T.ex. 400mg, 1 tablett"
+            className="sans w-full px-4 py-3 rounded-xl text-sm"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <Field label="När">
+          <input type="datetime-local" value={time} onChange={e => setTime(e.target.value)}
+            className="sans w-full px-4 py-3 rounded-xl text-sm"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <Field label="Övrig info (valfritt)">
+          <textarea value={note} onChange={e => setNote(e.target.value)}
+            placeholder="T.ex. tog det mot huvudvärk..." rows={2}
+            className="sans w-full px-4 py-3 rounded-xl text-sm resize-none"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <SaveBar onSave={save} />
+      </div>
+    </div>
+  );
+}
+
+function MinaMediciner({ medicines, onAdd, onUpdate, onDelete, onBack }) {
+  const [editing, setEditing] = useState(null); // null | 'new' | medicine object
+
+  if (editing) {
+    return (
+      <RegularMedicineForm
+        initial={editing === 'new' ? null : editing}
+        onCancel={() => setEditing(null)}
+        onSave={(data) => {
+          if (editing === 'new') onAdd(data);
+          else onUpdate(editing.id, data);
+          setEditing(null);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      <FormHeader title="Mina mediciner" onBack={onBack} />
+      <p className="sans text-xs mb-4" style={{ color: '#a08a6f', lineHeight: 1.5 }}>
+        Regelbundna mediciner du tar oavsett daglig loggning. Dessa skickas automatiskt med i AI-analysen.
+      </p>
+
+      {medicines.length === 0 ? (
+        <div className="text-center py-10 px-6 rounded-2xl mb-4" style={{ background: '#fff', border: '1px solid #e8dfd0' }}>
+          <p className="sans text-sm" style={{ color: '#8b7355', lineHeight: 1.6 }}>
+            Inga regelbundna mediciner än.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3 mb-4">
+          {medicines.map(m => (
+            <div key={m.id} className="p-4 rounded-2xl"
+              style={{ background: '#fff', border: '1px solid #e8dfd0' }}>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5" style={{ fontSize: '18px' }}>💊</div>
+                <div className="flex-1 min-w-0">
+                  <p className="sans text-sm font-medium" style={{ color: '#2d2416' }}>
+                    {m.name}{m.dose ? ` · ${m.dose}` : ''}
+                  </p>
+                  <p className="sans text-xs mt-1" style={{ color: '#8b7355' }}>
+                    {m.frequency === 'weekly'
+                      ? `${(m.weekdays || []).join('/')} kl ${joinTimes(m.times)}`
+                      : `Varje dag kl ${joinTimes(m.times)}`}
+                  </p>
+                  {m.note && (
+                    <p className="sans text-xs mt-1 italic" style={{ color: '#a08a6f' }}>"{m.note}"</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-3 mt-3 pt-3" style={{ borderTop: '1px solid #f5ede3' }}>
+                <button onClick={() => setEditing(m)}
+                  className="sans text-xs scale-btn flex items-center gap-1" style={{ color: '#2d2416' }}>
+                  <Pencil size={12} /> Redigera
+                </button>
+                <button onClick={() => onDelete(m.id)}
+                  className="sans text-xs scale-btn" style={{ color: '#c87654' }}>
+                  Ta bort
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button onClick={() => setEditing('new')}
+        className="sans w-full py-4 rounded-2xl text-sm font-medium scale-btn"
+        style={{ background: '#2d2416', color: '#f5ede3' }}>
+        + Lägg till medicin
+      </button>
+    </div>
+  );
+}
+
+function RegularMedicineForm({ initial, onCancel, onSave }) {
+  const isEdit = !!initial;
+  const [name, setName] = useState(() => {
+    if (!initial) return '';
+    return REGULAR_MEDICINE_QUICK.includes(initial.name) ? initial.name : 'Annat';
+  });
+  const [customName, setCustomName] = useState(() =>
+    initial && !REGULAR_MEDICINE_QUICK.includes(initial.name) ? initial.name : '');
+  const [dose, setDose] = useState(initial?.dose || '');
+  const [frequency, setFrequency] = useState(initial?.frequency || 'daily');
+  const [timesPerDay, setTimesPerDay] = useState(initial?.timesPerDay || 1);
+  const [times, setTimes] = useState(initial?.times?.length > 0 ? initial.times : ['08:00']);
+  const [weekdays, setWeekdays] = useState(initial?.weekdays || []);
+  const [note, setNote] = useState(initial?.note || '');
+
+  // Synka antal time-slots med frequency/timesPerDay
+  useEffect(() => {
+    const desired = frequency === 'multiple_daily' ? timesPerDay : 1;
+    setTimes(prev => {
+      if (prev.length === desired) return prev;
+      if (prev.length < desired) {
+        const filler = Array.from({ length: desired - prev.length }, () => '08:00');
+        return [...prev, ...filler];
+      }
+      return prev.slice(0, desired);
+    });
+  }, [frequency, timesPerDay]);
+
+  const toggleWeekday = (d) => setWeekdays(prev =>
+    prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+
+  const updateTime = (idx, val) => setTimes(prev => prev.map((t, i) => i === idx ? val : t));
+
+  const finalName = name === 'Annat' ? customName.trim() : name;
+  const canSave = finalName.length > 0 &&
+    (frequency !== 'weekly' || weekdays.length > 0);
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      name: finalName,
+      dose: dose.trim(),
+      frequency,
+      timesPerDay: frequency === 'multiple_daily' ? timesPerDay : 1,
+      times: [...times],
+      weekdays: frequency === 'weekly'
+        ? WEEKDAYS.filter(d => weekdays.includes(d)) // bevara veckodags-ordning
+        : [],
+      note: note.trim()
+    });
+  };
+
+  return (
+    <div className="fade-in">
+      <FormHeader title={isEdit ? 'Redigera medicin' : 'Ny medicin'} onBack={onCancel} />
+      <div className="space-y-5">
+        <Field label="Namn">
+          <div className="flex flex-wrap gap-2">
+            {REGULAR_MEDICINE_QUICK.map(m => (
+              <button key={m} onClick={() => setName(m)}
+                className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                style={{
+                  background: name === m ? '#2d2416' : '#fff',
+                  color: name === m ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>{m}</button>
+            ))}
+          </div>
+          {name === 'Annat' && (
+            <input type="text" value={customName}
+              onChange={e => setCustomName(e.target.value)}
+              placeholder="Skriv medicinens namn..."
+              autoFocus
+              className="sans w-full mt-3 px-4 py-3 rounded-xl text-sm"
+              style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+          )}
+        </Field>
+
+        <Field label="Dos (valfritt)">
+          <input type="text" value={dose} onChange={e => setDose(e.target.value)}
+            placeholder="T.ex. 20mg, 1 tablett"
+            className="sans w-full px-4 py-3 rounded-xl text-sm"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <Field label="Hur ofta?">
+          <div className="flex flex-col gap-2">
+            {[
+              { key: 'daily', label: 'En gång per dag' },
+              { key: 'multiple_daily', label: 'Flera gånger per dag' },
+              { key: 'weekly', label: 'Vissa veckodagar' }
+            ].map(f => (
+              <button key={f.key} onClick={() => setFrequency(f.key)}
+                className="sans text-sm py-3 px-4 rounded-xl scale-btn text-left"
+                style={{
+                  background: frequency === f.key ? '#2d2416' : '#fff',
+                  color: frequency === f.key ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>
+                <span style={{ marginRight: 8 }}>{frequency === f.key ? '●' : '○'}</span>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        {frequency === 'multiple_daily' && (
+          <Field label={`Antal gånger per dag: ${timesPerDay}`}>
+            <div className="grid grid-cols-3 gap-2">
+              {[2, 3, 4].map(n => (
+                <button key={n} onClick={() => setTimesPerDay(n)}
+                  className="sans py-3 rounded-lg text-sm font-medium scale-btn"
+                  style={{
+                    background: timesPerDay === n ? '#2d2416' : '#fff',
+                    color: timesPerDay === n ? '#f5ede3' : '#2d2416',
+                    border: '1px solid #e0d4c0'
+                  }}>{n}</button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {frequency === 'weekly' && (
+          <Field label="Veckodagar">
+            <div className="grid grid-cols-7 gap-1">
+              {WEEKDAYS.map(d => (
+                <button key={d} onClick={() => toggleWeekday(d)}
+                  className="sans py-3 rounded-lg text-xs font-medium scale-btn"
+                  style={{
+                    background: weekdays.includes(d) ? '#2d2416' : '#fff',
+                    color: weekdays.includes(d) ? '#f5ede3' : '#2d2416',
+                    border: '1px solid #e0d4c0',
+                    textTransform: 'capitalize'
+                  }}>{d}</button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <Field label={times.length > 1 ? 'Tider' : 'Tid'}>
+          <div className="flex flex-col gap-2">
+            {times.map((t, i) => (
+              <input key={i} type="time" value={t}
+                onChange={e => updateTime(i, e.target.value)}
+                className="sans w-full px-4 py-3 rounded-xl text-sm"
+                style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+            ))}
+          </div>
+          <p className="sans text-xs mt-2" style={{ color: '#a08a6f' }}>
+            Används för att visa mönster i AI-analysen
+          </p>
+        </Field>
+
+        <Field label="Notering (valfritt)">
+          <textarea value={note} onChange={e => setNote(e.target.value)}
+            placeholder="T.ex. tas på morgonen före frukost..." rows={2}
+            className="sans w-full px-4 py-3 rounded-xl text-sm resize-none"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <div className="flex gap-2">
+          <button onClick={handleSave} disabled={!canSave}
+            className="sans flex-1 py-4 rounded-2xl text-sm font-medium scale-btn"
+            style={{
+              background: '#2d2416', color: '#f5ede3',
+              opacity: canSave ? 1 : 0.5
+            }}>Spara</button>
+          <button onClick={onCancel}
+            className="sans px-5 py-4 rounded-2xl text-sm font-medium scale-btn"
+            style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
+            Avbryt
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EditEntry({ entry, onSave, onDelete, onBack }) {
   const [data, setData] = useState({ ...entry });
 
@@ -1163,13 +1852,15 @@ function EditButtons({ onSave, onDelete }) {
   );
 }
 
-function Insights({ entries, onBack, copyStatus, setCopyStatus, onReplace, onMerge }) {
+function Insights({ entries, regularMedicines = [], onBack, copyStatus, setCopyStatus, onReplace, onMerge, onClearRegularMedicines, onReplaceRegularMedicines, onMergeRegularMedicines }) {
   const analysis = useMemo(() => analyzePatterns(entries), [entries]);
   const fileInputRef = useRef(null);
   const [importStatus, setImportStatus] = useState('');
+  const [pendingImport, setPendingImport] = useState(null);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const copyToClipboard = async () => {
-    const text = buildAIPrompt(entries);
+    const text = buildAIPrompt(entries, regularMedicines);
     try {
       await navigator.clipboard.writeText(text);
       setCopyStatus('Kopierat! Klistra in i Claude, ChatGPT eller Gemini.');
@@ -1183,9 +1874,10 @@ function Insights({ entries, onBack, copyStatus, setCopyStatus, onReplace, onMer
   const exportJSON = () => {
     const payload = {
       app: 'magdagbok',
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
-      entries
+      entries,
+      regularMedicines
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1211,33 +1903,24 @@ function Insights({ entries, onBack, copyStatus, setCopyStatus, onReplace, onMer
         const incoming = Array.isArray(parsed) ? parsed : parsed.entries;
         if (!Array.isArray(incoming)) throw new Error('Felaktigt filformat');
 
-        const valid = incoming.filter(en =>
+        const validEntries = incoming.filter(en =>
           en && en.type && (en.id !== undefined) &&
-          ['food', 'symptom', 'toilet', 'liquid'].includes(en.type)
+          ['food', 'symptom', 'toilet', 'liquid', 'medicine'].includes(en.type)
         );
 
-        if (valid.length === 0) {
+        const incomingMeds = (parsed && Array.isArray(parsed.regularMedicines))
+          ? parsed.regularMedicines : [];
+        const validMeds = incomingMeds.filter(m =>
+          m && typeof m === 'object' && m.id !== undefined && typeof m.name === 'string'
+        );
+
+        if (validEntries.length === 0 && validMeds.length === 0) {
           setImportStatus('Inga giltiga anteckningar i filen.');
           setTimeout(() => setImportStatus(''), 4000);
           return;
         }
 
-        const action = window.confirm(
-          `Filen innehåller ${valid.length} anteckningar.\n\nOK = lägg till dessa till befintliga\nAvbryt = ersätt all befintlig data`
-        );
-
-        if (action) {
-          onMerge(valid);
-          setImportStatus(`${valid.length} anteckningar tillagda.`);
-        } else {
-          if (window.confirm('Är du säker? All nuvarande data kommer raderas och ersättas.')) {
-            onReplace(valid);
-            setImportStatus(`${valid.length} anteckningar importerade (befintlig data ersatt).`);
-          } else {
-            setImportStatus('Import avbruten.');
-          }
-        }
-        setTimeout(() => setImportStatus(''), 4000);
+        setPendingImport({ entries: validEntries, regularMedicines: validMeds });
       } catch (err) {
         setImportStatus('Kunde inte läsa filen. Är det rätt JSON-format?');
         setTimeout(() => setImportStatus(''), 4000);
@@ -1245,6 +1928,47 @@ function Insights({ entries, onBack, copyStatus, setCopyStatus, onReplace, onMer
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const summarizeImport = (p) => {
+    const parts = [];
+    if (p.entries.length > 0) parts.push(`${p.entries.length} anteckningar`);
+    if (p.regularMedicines.length > 0) parts.push(`${p.regularMedicines.length} regelbundna mediciner`);
+    return parts.join(' och ');
+  };
+
+  const confirmMerge = () => {
+    onMerge(pendingImport.entries);
+    if (typeof onMergeRegularMedicines === 'function') {
+      onMergeRegularMedicines(pendingImport.regularMedicines);
+    }
+    setImportStatus(`${summarizeImport(pendingImport)} tillagda.`);
+    setPendingImport(null);
+    setTimeout(() => setImportStatus(''), 4000);
+  };
+
+  const confirmReplace = () => {
+    onReplace(pendingImport.entries);
+    if (typeof onReplaceRegularMedicines === 'function') {
+      onReplaceRegularMedicines(pendingImport.regularMedicines);
+    }
+    setImportStatus(`${summarizeImport(pendingImport)} importerade (befintlig data ersatt).`);
+    setPendingImport(null);
+    setTimeout(() => setImportStatus(''), 4000);
+  };
+
+  const cancelImport = () => {
+    setPendingImport(null);
+    setImportStatus('Import avbruten.');
+    setTimeout(() => setImportStatus(''), 4000);
+  };
+
+  const confirmClearAll = () => {
+    onReplace([]);
+    if (typeof onClearRegularMedicines === 'function') onClearRegularMedicines();
+    setConfirmClear(false);
+    setImportStatus('All data raderad.');
+    setTimeout(() => setImportStatus(''), 4000);
   };
 
   return (
@@ -1349,11 +2073,12 @@ function Insights({ entries, onBack, copyStatus, setCopyStatus, onReplace, onMer
           Spara all data som .json-fil. Bra som backup eller för att flytta mellan enheter.
         </p>
         <div className="flex gap-2">
-          <button onClick={exportJSON} disabled={entries.length === 0}
+          <button onClick={exportJSON}
+            disabled={entries.length === 0 && regularMedicines.length === 0}
             className="sans flex-1 py-3 rounded-xl text-sm font-medium scale-btn flex items-center justify-center gap-2"
             style={{
               background: '#2d2416', color: '#f5ede3',
-              opacity: entries.length === 0 ? 0.5 : 1
+              opacity: (entries.length === 0 && regularMedicines.length === 0) ? 0.5 : 1
             }}>
             <Download size={14} />Exportera
           </button>
@@ -1368,7 +2093,116 @@ function Insights({ entries, onBack, copyStatus, setCopyStatus, onReplace, onMer
         {importStatus && (
           <p className="sans text-xs mt-3 text-center" style={{ color: '#8b7355' }}>{importStatus}</p>
         )}
+        <button onClick={() => setConfirmClear(true)}
+          disabled={entries.length === 0 && regularMedicines.length === 0}
+          className="sans w-full mt-3 py-3 rounded-xl text-sm font-medium scale-btn"
+          style={{
+            background: 'transparent', color: '#c87654',
+            border: '1px solid #e8c5b4',
+            opacity: (entries.length === 0 && regularMedicines.length === 0) ? 0.4 : 1
+          }}>
+          Radera all data
+        </button>
       </div>
+
+      {pendingImport !== null && (
+        <div
+          onClick={cancelImport}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 50,
+            background: 'rgba(45, 36, 22, 0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-2xl p-6"
+            style={{
+              background: '#f5ede3', border: '1px solid #e0d4c0',
+              maxWidth: '380px', width: '100%',
+              boxShadow: '0 20px 50px rgba(45, 36, 22, 0.25)'
+            }}
+          >
+            <h3 className="sans text-xs uppercase tracking-wider mb-2" style={{ color: '#8b7355' }}>
+              Importera data
+            </h3>
+            <p className="sans text-sm mb-1" style={{ color: '#2d2416', lineHeight: 1.5 }}>
+              Filen innehåller{' '}
+              <strong>{pendingImport.entries.length}</strong> anteckningar
+              {pendingImport.regularMedicines.length > 0 && (
+                <> och <strong>{pendingImport.regularMedicines.length}</strong> regelbundna mediciner</>
+              )}.
+            </p>
+            <p className="sans text-xs mb-5" style={{ color: '#8b7355', lineHeight: 1.5 }}>
+              Välj om du vill lägga till detta till befintlig data eller ersätta allt.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={confirmMerge}
+                className="sans w-full py-3 rounded-xl text-sm font-medium scale-btn"
+                style={{ background: '#2d2416', color: '#f5ede3' }}>
+                Lägg till
+              </button>
+              <button onClick={confirmReplace}
+                className="sans w-full py-3 rounded-xl text-sm font-medium scale-btn"
+                style={{ background: '#fff', color: '#c87654', border: '1px solid #e0d4c0' }}>
+                Ersätt
+              </button>
+              <button onClick={cancelImport}
+                className="sans w-full py-3 rounded-xl text-sm font-medium scale-btn"
+                style={{ background: 'transparent', color: '#8b7355' }}>
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmClear && (
+        <div
+          onClick={() => setConfirmClear(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 50,
+            background: 'rgba(45, 36, 22, 0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-2xl p-6"
+            style={{
+              background: '#f5ede3', border: '1px solid #e0d4c0',
+              maxWidth: '380px', width: '100%',
+              boxShadow: '0 20px 50px rgba(45, 36, 22, 0.25)'
+            }}
+          >
+            <h3 className="sans text-xs uppercase tracking-wider mb-2" style={{ color: '#c87654' }}>
+              Radera all data
+            </h3>
+            <p className="sans text-sm mb-1" style={{ color: '#2d2416', lineHeight: 1.5 }}>
+              Är du säker?
+            </p>
+            <p className="sans text-xs mb-5" style={{ color: '#8b7355', lineHeight: 1.5 }}>
+              Alla <strong>{entries.length}</strong> anteckningar
+              {regularMedicines.length > 0 && <> och <strong>{regularMedicines.length}</strong> regelbundna mediciner</>}
+              {' '}raderas permanent. Den här åtgärden går inte att ångra.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={confirmClearAll}
+                className="sans w-full py-3 rounded-xl text-sm font-medium scale-btn"
+                style={{ background: '#c87654', color: '#fff' }}>
+                Ja, radera allt
+              </button>
+              <button onClick={() => setConfirmClear(false)}
+                className="sans w-full py-3 rounded-xl text-sm font-medium scale-btn"
+                style={{ background: 'transparent', color: '#8b7355' }}>
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1461,6 +2295,7 @@ function getEntryTime(e) {
   if (e.type === 'symptom') return e.startedAt;
   if (e.type === 'food') return e.eatenAt;
   if (e.type === 'toilet' || e.type === 'liquid') return e.atTime;
+  if (e.type === 'medicine') return e.time;
   return new Date().toISOString();
 }
 
@@ -1493,6 +2328,9 @@ function flattenFoodItems(food) {
     Object.entries(food.categories).forEach(([catKey, arr]) => {
       arr.forEach(item => items.push({ ...item, category: catKey }));
     });
+  }
+  if (Array.isArray(food.snackItems)) {
+    food.snackItems.forEach(label => items.push({ label, fodmap: 'neutral', category: 'snack' }));
   }
   return items;
 }
@@ -1601,7 +2439,7 @@ function analyzePatterns(entries) {
   };
 }
 
-function buildAIPrompt(entries) {
+function buildAIPrompt(entries, regularMedicines = []) {
   const sorted = [...entries].sort((a, b) =>
     new Date(getEntryTime(a)) - new Date(getEntryTime(b)));
 
@@ -1613,7 +2451,9 @@ function buildAIPrompt(entries) {
         ? items.map(i => i.fodmap === 'high' ? `${i.label}[FODMAP-hög]` : i.label).join(', ')
         : '(inga strukturerade val)';
       const desc = e.description ? ` "${e.description}"` : '';
-      return `${t} | MAT | ${e.diet} · portion ${e.portion} | ${itemsStr}${desc}`;
+      const meta = mealTypeMeta(e.mealType);
+      const portionStr = e.portion ? ` · portion ${e.portion}` : '';
+      return `${t} | MAT (${meta.label}) | ${e.diet}${portionStr} | ${itemsStr}${desc}`;
     }
     if (e.type === 'liquid') {
       return `${t} | DRYCK | ${e.kind} ${e.amountMl} ml${e.notes ? ' (' + e.notes + ')' : ''}`;
@@ -1639,11 +2479,37 @@ function buildAIPrompt(entries) {
       ].filter(Boolean).join(' · ');
       return `${t} | VÄRK ${e.intensity}/10 | ${ctx} | duration: ${dur}`;
     }
+    if (e.type === 'medicine') {
+      const meds = Array.isArray(e.medicines) && e.medicines.length > 0
+        ? e.medicines.join(', ') : '(ingen specificerad)';
+      const dose = e.dose ? ` · dos: ${e.dose}` : '';
+      const typ = e.medicineType ? ` [${medicineTypeLabel(e.medicineType)}]` : '';
+      const note = e.note ? ` (${e.note})` : '';
+      return `${t} | MEDICIN${typ} | ${meds}${dose}${note}`;
+    }
     return '';
   }).join('\n');
 
+  const regularMedsBlock = (Array.isArray(regularMedicines) && regularMedicines.length > 0)
+    ? `\nREGELBUNDNA MEDICINER (tas oavsett daglig loggning):
+${regularMedicines.map(m => {
+  const base = formatRegularMedicine(m);
+  return m.note ? `${base} (${m.note})` : base;
+}).join('\n')}
+`
+    : '';
+
   return `Jag har loggat mina måltider, drycker, magsymptom och toalettbesök för att försöka hitta vad som ger mig ont i magen. Måltider är strukturerade med kosthållning, huvudprotein och kategoriserade ingredienser. Livsmedel som ofta är magkänsliga är taggade [FODMAP-hög].
 
+VIKTIGT — fråga användaren om följande om du inte redan känner till det och om det är relevant för analysen:
+- Ålder
+- Kön
+- Ungefärlig vikt
+- Känd diagnos (t.ex. IBS, Crohns, laktosintolerans, celiaki)
+- Aktuella mediciner som kan påverka magen (t.ex. smärtstillande, antibiotika, laxermedel)
+
+Ställ dessa frågor samlat i början av din analys, hoppa över de du redan känner till. Om användaren svarar, integrera informationen i din analys.
+${regularMedsBlock}
 Analysera grundligt:
 
 1. **Tidsmönster**: Hur lång tid efter måltider kommer värken typiskt? Olika tidsfönster pekar mot olika orsaker (30 min = magsäck, 2-4 h = tunntarm/laktos/FODMAP, 6+ h = tjocktarm/IBS).
@@ -1658,11 +2524,13 @@ Analysera grundligt:
 
 6. **Toalettmönster (Bristol)**: IBS-D, IBS-C, IBS-mixed, laktosintolerans, gallrelaterat?
 
-7. **Kontextfaktorer**: Hur korrelerar stress, sömn och mens med symptom? Funktionella magproblem (IBS) följer ofta stress mer än mat.
+7. **Mediciner**: Ta hänsyn till eventuella mediciner vid analysen — vissa kan direkt påverka mage/tarm (t.ex. NSAID som Ipren kan ge magbesvär, antibiotika rubbar tarmflora, järntabletter ger ofta förstoppning, laxermedel påverkar Bristol). Korrelera medicin-loggar tidsmässigt med symptom. Ta också hänsyn till regelbundna mediciner (listade ovan) — notera om något av dem kan påverka mage/tarm direkt (t.ex. NSAID → magirritation, järn → förstoppning, probiotika → tarmflora, omeprazol → syrahämning).
 
-8. **Hypoteser**: 2-3 mest sannolika förklaringar, rangordnade. Var ärlig om datakvaliteten.
+8. **Kontextfaktorer**: Hur korrelerar stress, sömn och mens med symptom? Funktionella magproblem (IBS) följer ofta stress mer än mat.
 
-9. **Nästa steg**: Konkreta åtgärder — eliminationsdiet (vad först?), läkartest att be om (laktos-andningstest, gluten-antikroppar IgA-tTG, calprotectin för inflammation, gallsyrediarré-test), eller specifik ny loggning som skulle hjälpa.
+9. **Hypoteser**: 2-3 mest sannolika förklaringar, rangordnade. Var ärlig om datakvaliteten.
+
+10. **Nästa steg**: Konkreta åtgärder — eliminationsdiet (vad först?), läkartest att be om (laktos-andningstest, gluten-antikroppar IgA-tTG, calprotectin för inflammation, gallsyrediarré-test), eller specifik ny loggning som skulle hjälpa.
 
 Var konkret och specifik. Undvik generella råd. Om datan är otillräcklig — säg det rakt ut. Detta är underlag för läkarbesök, inte ersättning.
 
