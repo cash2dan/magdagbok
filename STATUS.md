@@ -110,10 +110,14 @@ Varje kategori-accordion har en **+ Annat**-knapp som öppnar en textinput för 
 ```js
 {
   id, type: 'toilet',
-  bristol: 1-7, atTime,
+  bristol: 1-7|null,   // null vid noResult eller onlyGas
+  noResult: bool,      // försökt men inget kom
+  onlyGas: bool,       // bara gaser
+  atTime,
   urgent, painful, blood, mucus, notes
 }
 ```
+Bakåtkompat: gamla entries utan `noResult`/`onlyGas` tolkas som falsy — visas som vanlig Bristol-post.
 
 ### Medicine (daglig loggning)
 ```js
@@ -175,7 +179,7 @@ Genererad text innehåller:
    - `MAT (Lunch) | Blandkost · portion normal | pasta[FODMAP-hög], ...`
    - `DRYCK | Vatten 300 ml`
    - `VÄRK 7/10 | Nedre mage · Kramp | duration: 45 min`
-   - `TOA | Bristol typ 4 (Slät, mjuk korv)`
+   - `TOA | Bristol typ 4 (Slät, mjuk korv)` / `TOA | Inget kom` / `TOA | Bara gaser`
    - `MEDICIN | Movicol · dos: 1 påse`
    - `TRÄNING | Styrketräning · 45 min`
 
@@ -205,7 +209,7 @@ Entries grupperas progressivt beroende på ålder:
 - ✅ Oliver som eget val under Grönsaker
 - ✅ Vätska (alkoholfritt/alkohol-grupper, presets, "Annat"-fritext)
 - ✅ Symptom (intensitet, plats, kvalitet, samtidiga symptom, stress/sömn/mens, pågående-läge)
-- ✅ Toalett (Bristol-skala 1-7, flaggor, blod-varning)
+- ✅ Toalett (Bristol-skala 1-7, flaggor, blod-varning; + "Inget kom" och "Bara gaser" som egna besökstyper)
 - ✅ Medicin (multi-select snabbval inkl. Movicol, dos, tid, notering)
 - ✅ Träning (Styrketräning, HIIT, Promenad, Powerwalk; längd som presets eller fritext)
 

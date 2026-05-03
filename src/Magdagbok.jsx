@@ -670,6 +670,14 @@ function EntryCard({ entry, onDelete, onEdit }) {
   }
 
   if (entry.type === 'toilet') {
+    const visitLabel = entry.noResult ? 'Inget kom' : entry.onlyGas ? 'Bara gaser' : `Bristol ${entry.bristol}`;
+    const visitDetail = entry.noResult || entry.onlyGas ? '' : bristolDescription(entry.bristol);
+    const flags = [
+      entry.urgent && 'brådskande',
+      entry.painful && 'smärtsamt',
+      entry.blood && 'blod',
+      entry.mucus && 'slem',
+    ].filter(Boolean).join(' · ');
     return (
       <div onClick={() => setShowActions(!showActions)} className="p-4 rounded-2xl cursor-pointer"
         style={{ background: '#fff', border: '1px solid #e8dfd0' }}>
@@ -678,16 +686,12 @@ function EntryCard({ entry, onDelete, onEdit }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2">
               <p className="sans text-sm font-medium" style={{ color: '#2d2416' }}>
-                Toalettbesök · Bristol {entry.bristol}
+                Toalettbesök · {visitLabel}
               </p>
               <span className="sans text-xs flex-shrink-0" style={{ color: '#8b7355' }}>{formatTime(entry.atTime)}</span>
             </div>
             <p className="sans text-xs mt-1" style={{ color: '#8b7355' }}>
-              {bristolDescription(entry.bristol)}
-              {entry.urgent && ' · brådskande'}
-              {entry.painful && ' · smärtsamt'}
-              {entry.blood && ' · blod'}
-              {entry.mucus && ' · slem'}
+              {visitDetail}{visitDetail && flags && ' · '}{flags}
             </p>
           </div>
         </div>
@@ -1398,7 +1402,14 @@ function LogSymptom({ onSave, onBack }) {
   );
 }
 
+const TOILET_VISIT_TYPES = [
+  { key: 'normal', label: 'Avföring' },
+  { key: 'noResult', label: 'Inget kom' },
+  { key: 'onlyGas', label: 'Bara gaser' },
+];
+
 function LogToilet({ onSave, onBack }) {
+  const [visitType, setVisitType] = useState('normal');
   const [bristol, setBristol] = useState(4);
   const [time, setTime] = useState(toLocalDateTime(new Date()));
   const [urgent, setUrgent] = useState(false);
@@ -1407,9 +1418,14 @@ function LogToilet({ onSave, onBack }) {
   const [mucus, setMucus] = useState(false);
   const [notes, setNotes] = useState('');
 
+  const showBristol = visitType === 'normal';
+
   const save = () => {
     onSave({
-      type: 'toilet', bristol,
+      type: 'toilet',
+      bristol: showBristol ? bristol : null,
+      noResult: visitType === 'noResult',
+      onlyGas: visitType === 'onlyGas',
       atTime: new Date(time).toISOString(),
       urgent, painful, blood, mucus, notes
     });
@@ -1419,30 +1435,47 @@ function LogToilet({ onSave, onBack }) {
     <div className="fade-in">
       <FormHeader title="Toalettbesök" onBack={onBack} />
       <div className="space-y-5">
+        <Field label="Typ">
+          <div className="flex gap-2">
+            {TOILET_VISIT_TYPES.map(t => (
+              <button key={t.key} onClick={() => setVisitType(t.key)}
+                className="sans flex-1 py-3 rounded-xl text-sm scale-btn"
+                style={{
+                  background: visitType === t.key ? '#2d2416' : '#fff',
+                  color: visitType === t.key ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </Field>
         <Field label="När">
           <input type="datetime-local" value={time} onChange={e => setTime(e.target.value)}
             className="sans w-full px-4 py-3 rounded-xl text-sm"
             style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
         </Field>
-        <Field label={`Bristol-skala: typ ${bristol}`}>
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {[1,2,3,4,5,6,7].map(n => (
-              <button key={n} onClick={() => setBristol(n)}
-                className="sans py-3 rounded-lg text-sm font-medium scale-btn"
-                style={{
-                  background: bristol === n ? '#2d2416' : '#fff',
-                  color: bristol === n ? '#f5ede3' : '#2d2416',
-                  border: '1px solid #e0d4c0'
-                }}>{n}</button>
-            ))}
-          </div>
-          <p className="sans text-xs px-1" style={{ color: '#8b7355', lineHeight: 1.5 }}>
-            {bristolDescription(bristol)}
-            {bristol <= 2 && ' — tecken på förstoppning'}
-            {bristol >= 6 && ' — tecken på diarré'}
-            {bristol >= 3 && bristol <= 5 && ' — normalt'}
-          </p>
-        </Field>
+        {showBristol && (
+          <Field label={`Bristol-skala: typ ${bristol}`}>
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {[1,2,3,4,5,6,7].map(n => (
+                <button key={n} onClick={() => setBristol(n)}
+                  className="sans py-3 rounded-lg text-sm font-medium scale-btn"
+                  style={{
+                    background: bristol === n ? '#2d2416' : '#fff',
+                    color: bristol === n ? '#f5ede3' : '#2d2416',
+                    border: '1px solid #e0d4c0'
+                  }}>{n}</button>
+              ))}
+            </div>
+            <p className="sans text-xs px-1" style={{ color: '#8b7355', lineHeight: 1.5 }}>
+              {bristolDescription(bristol)}
+              {bristol <= 2 && ' — tecken på förstoppning'}
+              {bristol >= 6 && ' — tecken på diarré'}
+              {bristol >= 3 && bristol <= 5 && ' — normalt'}
+            </p>
+          </Field>
+        )}
         <Field label="Övrigt (valfritt)">
           <div className="flex flex-wrap gap-2">
             {[
@@ -2761,7 +2794,10 @@ function buildAIPrompt(entries, regularMedicines = []) {
         e.urgent && 'brådskande', e.painful && 'smärtsamt',
         e.blood && 'BLOD', e.mucus && 'slem'
       ].filter(Boolean).join(', ');
-      return `${t} | TOA | Bristol typ ${e.bristol} (${bristolDescription(e.bristol)})${flags ? ' [' + flags + ']' : ''}`;
+      const visitStr = e.noResult ? 'Inget kom'
+        : e.onlyGas ? 'Bara gaser'
+        : `Bristol typ ${e.bristol} (${bristolDescription(e.bristol)})`;
+      return `${t} | TOA | ${visitStr}${flags ? ' [' + flags + ']' : ''}`;
     }
     if (e.type === 'symptom') {
       const dur = e.endedAt
