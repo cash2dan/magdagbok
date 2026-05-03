@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Utensils, Activity, TrendingUp, ArrowLeft, Check, Copy, Droplet, Download, Upload, Pencil, GlassWater, ChevronDown, ChevronUp, Pill } from 'lucide-react';
+import { Utensils, Activity, TrendingUp, ArrowLeft, Check, Copy, Droplet, Download, Upload, Pencil, GlassWater, ChevronDown, ChevronUp, Pill, Dumbbell } from 'lucide-react';
 
 // ============================================================================
 // MAT-TAXONOMI
@@ -130,7 +130,8 @@ const FOOD_CATEGORIES = [
       { label: 'Sallad', fodmap: 'low' },
       { label: 'Morot', fodmap: 'low' },
       { label: 'Spenat', fodmap: 'low' },
-      { label: 'Zucchini', fodmap: 'low' }
+      { label: 'Zucchini', fodmap: 'low' },
+      { label: 'Oliver', fodmap: 'low' }
     ]
   },
   {
@@ -213,7 +214,7 @@ const FOOD_CATEGORIES = [
 // ============================================================================
 const MEDICINE_QUICK = [
   'Ipren/Ibuprofen', 'Alvedon/Paracetamol', 'Omeprazol', 'Antibiotika',
-  'Dulcogas', 'Iberogast', 'Järntabletter', 'Probiotika', 'Magnesium',
+  'Movicol', 'Dulcogas', 'Iberogast', 'Järntabletter', 'Probiotika', 'Magnesium',
   'Laxermedel', 'Antihistamin', 'Annat'
 ];
 
@@ -225,6 +226,25 @@ const MEDICINE_TYPES = [
 
 function medicineTypeLabel(key) {
   return MEDICINE_TYPES.find(t => t.key === key)?.label || key;
+}
+
+// ============================================================================
+// TRÄNING-TAXONOMI
+// ============================================================================
+const WORKOUT_TYPES = [
+  { key: 'styrke', label: 'Styrketräning', emoji: '🏋️' },
+  { key: 'hiit', label: 'HIIT', emoji: '🏃' },
+  { key: 'promenad', label: 'Promenad', emoji: '🚶' },
+  { key: 'powerwalk', label: 'Powerwalk', emoji: '⚡' },
+];
+
+const DURATION_PRESETS = [15, 20, 30, 45, 60, 90];
+
+function workoutLabel(key) {
+  return WORKOUT_TYPES.find(w => w.key === key)?.label || key;
+}
+function workoutEmoji(key) {
+  return WORKOUT_TYPES.find(w => w.key === key)?.emoji || '🏃';
 }
 
 const REGULAR_MEDICINE_QUICK = [
@@ -427,6 +447,7 @@ export default function Magdagbok() {
         {view === 'logToilet' && <LogToilet onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
         {view === 'logLiquid' && <LogLiquid onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
         {view === 'logMedicine' && <LogMedicine onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
+        {view === 'logTraining' && <LogTraining onSave={(e) => { addEntry(e); setView('home'); }} onBack={() => setView('home')} />}
         {view === 'edit' && editingEntry && (
           <EditEntry entry={editingEntry}
             onSave={(updates) => { updateEntry(editingEntry.id, updates); setView('home'); setEditingEntry(null); }}
@@ -481,6 +502,11 @@ export default function Magdagbok() {
               style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
               <Droplet size={15} />Toa
             </button>
+            <button onClick={() => setView('logTraining')}
+              className="flex-1 py-3 rounded-2xl scale-btn flex flex-col items-center justify-center gap-1 sans text-xs font-medium"
+              style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
+              <Dumbbell size={15} />Träna
+            </button>
             <button onClick={() => setView('insights')}
               className="py-3 px-3 rounded-2xl scale-btn flex items-center justify-center sans"
               style={{ background: '#fff', color: '#2d2416', border: '1px solid #e0d4c0' }}>
@@ -494,16 +520,21 @@ export default function Magdagbok() {
 }
 
 function HomeView({ entries, onDelete, onEdit }) {
-  const grouped = useMemo(() => {
-    const groups = {};
-    entries.forEach(e => {
-      const date = new Date(getEntryTime(e));
-      const key = date.toDateString();
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(e);
-    });
-    return groups;
-  }, [entries]);
+  const groups = useMemo(() => groupEntries(entries), [entries]);
+
+  const todayKey = `day-${new Date().toDateString()}`;
+  const yesterdayKey = (() => {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    return `day-${d.toDateString()}`;
+  })();
+
+  const [openSections, setOpenSections] = useState(() => new Set([todayKey, yesterdayKey]));
+
+  const toggle = (key) => setOpenSections(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   if (entries.length === 0) {
     return (
@@ -522,19 +553,36 @@ function HomeView({ entries, onDelete, onEdit }) {
   }
 
   return (
-    <div className="fade-in space-y-6">
-      {Object.entries(grouped).map(([date, items]) => (
-        <section key={date}>
-          <h3 className="sans text-xs uppercase tracking-wider mb-3" style={{ color: '#8b7355' }}>
-            {formatDateHeader(date)}
-          </h3>
-          <div className="space-y-2">
-            {items.map(entry => (
-              <EntryCard key={entry.id} entry={entry} onDelete={() => onDelete(entry.id)} onEdit={() => onEdit(entry)} />
-            ))}
-          </div>
-        </section>
-      ))}
+    <div className="fade-in space-y-2">
+      {groups.map(group => {
+        const isOpen = openSections.has(group.key);
+        return (
+          <section key={group.key}>
+            <button onClick={() => toggle(group.key)}
+              className="w-full flex items-center justify-between px-1 py-2 scale-btn">
+              <div className="flex items-center gap-2">
+                <h3 className="sans text-xs uppercase tracking-wider" style={{ color: '#8b7355' }}>
+                  {group.label}
+                </h3>
+                <span className="sans text-xs px-2 py-0.5 rounded-full"
+                  style={{ background: '#e8dfd0', color: '#8b7355' }}>
+                  {group.entries.length}
+                </span>
+              </div>
+              {isOpen
+                ? <ChevronUp size={14} style={{ color: '#b0a090' }} />
+                : <ChevronDown size={14} style={{ color: '#b0a090' }} />}
+            </button>
+            {isOpen && (
+              <div className="space-y-2 mb-4">
+                {group.entries.map(entry => (
+                  <EntryCard key={entry.id} entry={entry} onDelete={() => onDelete(entry.id)} onEdit={() => onEdit(entry)} />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -680,6 +728,28 @@ function EntryCard({ entry, onDelete, onEdit }) {
     );
   }
 
+  if (entry.type === 'training') {
+    return (
+      <div onClick={() => setShowActions(!showActions)} className="p-4 rounded-2xl cursor-pointer"
+        style={{ background: '#fff', border: '1px solid #e8dfd0' }}>
+        <div className="flex items-start gap-3">
+          <div className="mt-1" style={{ fontSize: '18px' }}>{workoutEmoji(entry.workoutType)}</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="sans text-sm font-medium" style={{ color: '#2d2416' }}>
+                {workoutLabel(entry.workoutType)}
+                {entry.durationMinutes ? ` · ${entry.durationMinutes} min` : ''}
+              </p>
+              <span className="sans text-xs flex-shrink-0" style={{ color: '#8b7355' }}>{formatTime(entry.startedAt)}</span>
+            </div>
+            {entry.notes && <p className="sans text-xs mt-1" style={{ color: '#8b7355' }}>{entry.notes}</p>}
+          </div>
+        </div>
+        {renderActions()}
+      </div>
+    );
+  }
+
   // Symptom
   const duration = entry.endedAt
     ? Math.round((new Date(entry.endedAt) - new Date(entry.startedAt)) / 60000)
@@ -746,6 +816,7 @@ function LogFood({ onSave, onBack }) {
   const [snackItems, setSnackItems] = useState([]);
   const [customSnack, setCustomSnack] = useState('');
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const [customItemTexts, setCustomItemTexts] = useState({});
   const [portion, setPortion] = useState('normal');
   const [description, setDescription] = useState('');
   const [time, setTime] = useState(toLocalDateTime(new Date()));
@@ -804,6 +875,22 @@ function LogFood({ onSave, onBack }) {
       else next[catKey] = updated;
       return next;
     });
+  };
+
+  const toggleCustomInput = (catKey) => {
+    setCustomItemTexts(prev => {
+      const next = { ...prev };
+      if (next[catKey] !== undefined) delete next[catKey];
+      else next[catKey] = '';
+      return next;
+    });
+  };
+
+  const addCustomItem = (catKey) => {
+    const text = (customItemTexts[catKey] || '').trim();
+    if (!text) return;
+    toggleCategoryItem(catKey, { label: text, fodmap: 'neutral' });
+    setCustomItemTexts(prev => ({ ...prev, [catKey]: '' }));
   };
 
   const toggleSnackItem = (label) => {
@@ -950,26 +1037,56 @@ function LogFood({ onSave, onBack }) {
                         </div>
                       )}
                       {isOpen && (
-                        <div className="px-3 pb-3 flex flex-wrap gap-2">
-                          {cat.options.map(opt => {
-                            const isSelected = selected.some(s => s.label === opt.label);
-                            const excluded = dietExclSet.has(opt.label);
-                            return (
-                              <button key={opt.label} onClick={() => toggleCategoryItem(cat.key, opt)}
-                                className="sans text-xs px-3 py-2 rounded-full scale-btn"
-                                style={{
-                                  background: isSelected ? '#2d2416' : fodmapBg(opt.fodmap),
-                                  color: isSelected ? '#f5ede3' : fodmapColor(opt.fodmap),
-                                  border: '1px solid',
-                                  borderColor: isSelected ? '#2d2416' : fodmapBorder(opt.fodmap),
-                                  opacity: excluded ? 0.35 : 1,
-                                  pointerEvents: excluded ? 'none' : 'auto'
-                                }}>
-                                {opt.label}
-                                {opt.fodmap === 'high' && !isSelected && <span className="ml-1" style={{ opacity: 0.6 }}>•</span>}
+                        <div className="px-3 pb-3">
+                          <div className="flex flex-wrap gap-2">
+                            {cat.options.map(opt => {
+                              const isSelected = selected.some(s => s.label === opt.label);
+                              const excluded = dietExclSet.has(opt.label);
+                              return (
+                                <button key={opt.label} onClick={() => toggleCategoryItem(cat.key, opt)}
+                                  className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                                  style={{
+                                    background: isSelected ? '#2d2416' : fodmapBg(opt.fodmap),
+                                    color: isSelected ? '#f5ede3' : fodmapColor(opt.fodmap),
+                                    border: '1px solid',
+                                    borderColor: isSelected ? '#2d2416' : fodmapBorder(opt.fodmap),
+                                    opacity: excluded ? 0.35 : 1,
+                                    pointerEvents: excluded ? 'none' : 'auto'
+                                  }}>
+                                  {opt.label}
+                                  {opt.fodmap === 'high' && !isSelected && <span className="ml-1" style={{ opacity: 0.6 }}>•</span>}
+                                </button>
+                              );
+                            })}
+                            <button onClick={() => toggleCustomInput(cat.key)}
+                              className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                              style={{
+                                background: customItemTexts[cat.key] !== undefined ? '#2d2416' : '#fff',
+                                color: customItemTexts[cat.key] !== undefined ? '#f5ede3' : '#8b7355',
+                                border: '1px dashed #c0b09a'
+                              }}>
+                              + Annat
+                            </button>
+                          </div>
+                          {customItemTexts[cat.key] !== undefined && (
+                            <div className="flex gap-2 mt-3">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={customItemTexts[cat.key]}
+                                onChange={e => setCustomItemTexts(prev => ({ ...prev, [cat.key]: e.target.value }))}
+                                onKeyDown={e => e.key === 'Enter' && addCustomItem(cat.key)}
+                                placeholder="Ange livsmedel..."
+                                className="sans flex-1 px-3 py-2 rounded-xl text-sm"
+                                style={{ background: '#f5ede3', border: '1px solid #d4b896', color: '#2d2416' }}
+                              />
+                              <button onClick={() => addCustomItem(cat.key)}
+                                className="sans px-4 py-2 rounded-xl text-sm font-medium scale-btn"
+                                style={{ background: '#2d2416', color: '#f5ede3' }}>
+                                +
                               </button>
-                            );
-                          })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1051,7 +1168,7 @@ function LogLiquid({ onSave, onBack }) {
 
   const nonAlcoholic = [
     'Vatten', 'Vatten - Kolsyrat', 'Kaffe', 'Te', 'Mjölk', 'Juice',
-    'Läsk', 'Läsk - Sockerfri', 'Energidryck', 'Movicol', 'Annat'
+    'Läsk', 'Läsk - Sockerfri', 'Energidryck', 'Annat'
   ];
   const alcoholic = ['Drink', 'Öl', 'Rödvin', 'Vittvin', 'Vin - Mousserande'];
   const presets = [
@@ -1437,6 +1554,80 @@ function LogMedicine({ onSave, onBack }) {
   );
 }
 
+function LogTraining({ onSave, onBack }) {
+  const [workoutType, setWorkoutType] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState('');
+  const [startedAt, setStartedAt] = useState(toLocalDateTime(new Date()));
+  const [notes, setNotes] = useState('');
+
+  const save = () => {
+    onSave({
+      type: 'training',
+      workoutType,
+      durationMinutes: durationMinutes ? Number(durationMinutes) : null,
+      startedAt: new Date(startedAt).toISOString(),
+      notes: notes.trim() || null
+    });
+  };
+
+  return (
+    <div className="fade-in">
+      <FormHeader title="Träning" onBack={onBack} />
+      <div className="space-y-5">
+        <Field label="Typ av träning">
+          <div className="grid grid-cols-2 gap-2">
+            {WORKOUT_TYPES.map(w => (
+              <button key={w.key} onClick={() => setWorkoutType(w.key)}
+                className="sans text-sm px-3 py-3 rounded-xl scale-btn flex items-center gap-2"
+                style={{
+                  background: workoutType === w.key ? '#2d2416' : '#fff',
+                  color: workoutType === w.key ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>
+                <span>{w.emoji}</span> {w.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Längd">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {DURATION_PRESETS.map(d => (
+              <button key={d} onClick={() => setDurationMinutes(String(d))}
+                className="sans text-xs px-3 py-2 rounded-full scale-btn"
+                style={{
+                  background: durationMinutes === String(d) ? '#2d2416' : '#fff',
+                  color: durationMinutes === String(d) ? '#f5ede3' : '#2d2416',
+                  border: '1px solid #e0d4c0'
+                }}>{d} min</button>
+            ))}
+          </div>
+          <input type="number" min="1" max="480" value={durationMinutes}
+            onChange={e => setDurationMinutes(e.target.value)}
+            placeholder="Eller ange antal minuter..."
+            className="sans w-full px-4 py-3 rounded-xl text-sm"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <Field label="När">
+          <input type="datetime-local" value={startedAt} onChange={e => setStartedAt(e.target.value)}
+            className="sans w-full px-4 py-3 rounded-xl text-sm"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <Field label="Anteckningar (valfritt)">
+          <textarea value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="T.ex. löpband, promenad i skogen..." rows={2}
+            className="sans w-full px-4 py-3 rounded-xl text-sm resize-none"
+            style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+        </Field>
+
+        <SaveBar onSave={save} disabled={!workoutType} />
+      </div>
+    </div>
+  );
+}
+
 function MinaMediciner({ medicines, onAdd, onUpdate, onDelete, onBack }) {
   const [editing, setEditing] = useState(null); // null | 'new' | medicine object
 
@@ -1710,6 +1901,9 @@ function EditEntry({ entry, onSave, onDelete, onBack }) {
     } else if ((entry.type === 'toilet' || entry.type === 'liquid') && data.atTimeLocal !== undefined) {
       updates.atTime = new Date(data.atTimeLocal).toISOString();
       delete updates.atTimeLocal;
+    } else if (entry.type === 'training' && data.startedAtLocal !== undefined) {
+      updates.startedAt = new Date(data.startedAtLocal).toISOString();
+      delete updates.startedAtLocal;
     }
     onSave(updates);
   };
@@ -1801,6 +1995,51 @@ function EditEntry({ entry, onSave, onDelete, onBack }) {
               value={data.atTimeLocal !== undefined ? data.atTimeLocal : toLocalDateTime(new Date(data.atTime))}
               onChange={e => update('atTimeLocal', e.target.value)}
               className="sans w-full px-4 py-3 rounded-xl text-sm"
+              style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+          </Field>
+          <EditButtons onSave={save} onDelete={onDelete} />
+        </div>
+      </div>
+    );
+  }
+
+  if (entry.type === 'training') {
+    return (
+      <div className="fade-in">
+        <FormHeader title="Redigera träning" onBack={onBack} />
+        <div className="space-y-5">
+          <Field label="Typ av träning">
+            <div className="grid grid-cols-2 gap-2">
+              {WORKOUT_TYPES.map(w => (
+                <button key={w.key} onClick={() => update('workoutType', w.key)}
+                  className="sans text-sm px-3 py-3 rounded-xl scale-btn flex items-center gap-2"
+                  style={{
+                    background: data.workoutType === w.key ? '#2d2416' : '#fff',
+                    color: data.workoutType === w.key ? '#f5ede3' : '#2d2416',
+                    border: '1px solid #e0d4c0'
+                  }}>
+                  <span>{w.emoji}</span> {w.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Längd (minuter)">
+            <input type="number" min="1" max="480" value={data.durationMinutes || ''}
+              onChange={e => update('durationMinutes', e.target.value ? Number(e.target.value) : null)}
+              placeholder="Antal minuter"
+              className="sans w-full px-4 py-3 rounded-xl text-sm"
+              style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+          </Field>
+          <Field label="När">
+            <input type="datetime-local"
+              value={data.startedAtLocal !== undefined ? data.startedAtLocal : toLocalDateTime(new Date(data.startedAt))}
+              onChange={e => update('startedAtLocal', e.target.value)}
+              className="sans w-full px-4 py-3 rounded-xl text-sm"
+              style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
+          </Field>
+          <Field label="Anteckningar">
+            <textarea value={data.notes || ''} onChange={e => update('notes', e.target.value || null)}
+              rows={2} className="sans w-full px-4 py-3 rounded-xl text-sm resize-none"
               style={{ background: '#fff', border: '1px solid #e0d4c0', color: '#2d2416' }} />
           </Field>
           <EditButtons onSave={save} onDelete={onDelete} />
@@ -1905,7 +2144,7 @@ function Insights({ entries, regularMedicines = [], onBack, copyStatus, setCopyS
 
         const validEntries = incoming.filter(en =>
           en && en.type && (en.id !== undefined) &&
-          ['food', 'symptom', 'toilet', 'liquid', 'medicine'].includes(en.type)
+          ['food', 'symptom', 'toilet', 'liquid', 'medicine', 'training'].includes(en.type)
         );
 
         const incomingMeds = (parsed && Array.isArray(parsed.regularMedicines))
@@ -2296,6 +2535,7 @@ function getEntryTime(e) {
   if (e.type === 'food') return e.eatenAt;
   if (e.type === 'toilet' || e.type === 'liquid') return e.atTime;
   if (e.type === 'medicine') return e.time;
+  if (e.type === 'training') return e.startedAt;
   return new Date().toISOString();
 }
 
@@ -2311,6 +2551,64 @@ function formatDateHeader(dateStr) {
   if (d.toDateString() === today.toDateString()) return 'Idag';
   if (d.toDateString() === yest.toDateString()) return 'Igår';
   return d.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function getISOWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const jan4 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - jan4) / 86400000 - 3 + (jan4.getDay() + 6) % 7) / 7);
+}
+
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function groupEntries(entries) {
+  const now = new Date();
+  const cutoffWeek = new Date(now);
+  cutoffWeek.setDate(cutoffWeek.getDate() - 14);
+  const cutoffMonth = new Date(now);
+  cutoffMonth.setDate(cutoffMonth.getDate() - 90);
+
+  const map = new Map();
+
+  entries.forEach(e => {
+    const t = new Date(getEntryTime(e));
+    let key, label, sortKey;
+
+    if (t >= cutoffWeek) {
+      const ds = t.toDateString();
+      key = `day-${ds}`;
+      label = formatDateHeader(ds);
+      sortKey = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+    } else if (t >= cutoffMonth) {
+      const monday = getMondayOfWeek(t);
+      const sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6);
+      key = `week-${monday.toDateString()}`;
+      label = `Vecka ${getISOWeek(t)} · ${monday.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}–${sunday.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`;
+      sortKey = monday.getTime();
+    } else {
+      key = `month-${t.getFullYear()}-${t.getMonth()}`;
+      label = t.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+      sortKey = new Date(t.getFullYear(), t.getMonth(), 1).getTime();
+    }
+
+    if (!map.has(key)) map.set(key, { key, label, entries: [], sortKey });
+    map.get(key).entries.push(e);
+  });
+
+  map.forEach(g => {
+    g.entries.sort((a, b) => new Date(getEntryTime(a)) - new Date(getEntryTime(b)));
+  });
+
+  return [...map.values()].sort((a, b) => b.sortKey - a.sortKey);
 }
 
 function toLocalDateTime(d) {
@@ -2487,6 +2785,11 @@ function buildAIPrompt(entries, regularMedicines = []) {
       const note = e.note ? ` (${e.note})` : '';
       return `${t} | MEDICIN${typ} | ${meds}${dose}${note}`;
     }
+    if (e.type === 'training') {
+      const dur = e.durationMinutes ? ` · ${e.durationMinutes} min` : '';
+      const note = e.notes ? ` (${e.notes})` : '';
+      return `${t} | TRÄNING | ${workoutLabel(e.workoutType)}${dur}${note}`;
+    }
     return '';
   }).join('\n');
 
@@ -2526,11 +2829,13 @@ Analysera grundligt:
 
 7. **Mediciner**: Ta hänsyn till eventuella mediciner vid analysen — vissa kan direkt påverka mage/tarm (t.ex. NSAID som Ipren kan ge magbesvär, antibiotika rubbar tarmflora, järntabletter ger ofta förstoppning, laxermedel påverkar Bristol). Korrelera medicin-loggar tidsmässigt med symptom. Ta också hänsyn till regelbundna mediciner (listade ovan) — notera om något av dem kan påverka mage/tarm direkt (t.ex. NSAID → magirritation, järn → förstoppning, probiotika → tarmflora, omeprazol → syrahämning).
 
-8. **Kontextfaktorer**: Hur korrelerar stress, sömn och mens med symptom? Funktionella magproblem (IBS) följer ofta stress mer än mat.
+8. **Träning**: Korrelera träningspass med symptom. Högintensiv träning (HIIT, styrke) kan trigga magbesvär via ökad tarmrörlighet och minskad blodförsörjning till tarmen. Promenader brukar däremot lindra IBS-symptom.
 
-9. **Hypoteser**: 2-3 mest sannolika förklaringar, rangordnade. Var ärlig om datakvaliteten.
+9. **Kontextfaktorer**: Hur korrelerar stress, sömn och mens med symptom? Funktionella magproblem (IBS) följer ofta stress mer än mat.
 
-10. **Nästa steg**: Konkreta åtgärder — eliminationsdiet (vad först?), läkartest att be om (laktos-andningstest, gluten-antikroppar IgA-tTG, calprotectin för inflammation, gallsyrediarré-test), eller specifik ny loggning som skulle hjälpa.
+10. **Hypoteser**: 2-3 mest sannolika förklaringar, rangordnade. Var ärlig om datakvaliteten.
+
+11. **Nästa steg**: Konkreta åtgärder — eliminationsdiet (vad först?), läkartest att be om (laktos-andningstest, gluten-antikroppar IgA-tTG, calprotectin för inflammation, gallsyrediarré-test), eller specifik ny loggning som skulle hjälpa.
 
 Var konkret och specifik. Undvik generella råd. Om datan är otillräcklig — säg det rakt ut. Detta är underlag för läkarbesök, inte ersättning.
 
